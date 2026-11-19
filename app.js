@@ -85,7 +85,7 @@ function mark(s,w){const stem=w.replace(/e$/,'');return esc(s).replace(new RegEx
 const sayBtn=w=>`<button class="say" data-act="say" data-w="${esc(w)}" aria-label="Hear: ${esc(w)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none"/></svg></button>`;
 const findBtn=w=>`<button class="find" data-act="find" data-w="${esc(w)}" title="Search Google: ${esc(w)} Bangla meaning with mnemonic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg><span>Google</span></button>`;
 // opens next to the app (desktop) and is reused for the next word; phones open it as a tab
-function find(w){const url='https://www.google.com/search?q='+encodeURIComponent(w+' Bangla meaning with mnemonic');
+function find(w,q){const url='https://www.google.com/search?q='+encodeURIComponent(q||w+' Bangla meaning with mnemonic');
 const W=480,H=Math.min(720,(screen.availHeight||800)-100),left=Math.max(0,(window.screenX||0)+(window.outerWidth||W)-W-16),top=(window.screenY||0)+80;
 const win=window.open(url,'vocab500-google',innerWidth>760?`popup,width=${W},height=${H},left=${left},top=${top}`:'');
 if(win)try{win.focus()}catch(e){}else location.href=url}
@@ -128,7 +128,7 @@ return `<div class="picker">
 function rangeNums(k){const r=RG[k];let a=Math.max(1,Math.min(r.a,r.z)),z=Math.min(N,Math.max(r.a,r.z));const out=[];for(let n=a;n<=z;n++)out.push(n);return out}
 
 // ---------- views ----------
-let SES=null,QZ=null,IX={q:'',f:'all'};
+let SES=null,QZ=null,ST=null,SPICK=false,IX={q:'',f:'all'};
 const NAV=[['today','Today','<path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4"/><circle cx="12" cy="12" r="4"/>'],
 ['learn','Learn','<path d="M4 5h11a3 3 0 0 1 3 3v12H7a3 3 0 0 1-3-3z"/><path d="M8 9h6M8 13h4"/>'],
 ['quiz','Quiz','<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01"/>'],
@@ -136,10 +136,10 @@ const NAV=[['today','Today','<path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6.3 6.3l1.
 ['words','Word list','<path d="M5 4h14v16H5zM9 8h6M9 12h6M9 16h3"/>'],
 ['settings','Settings','<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>']];
 function route(){const h=location.hash.replace(/^#\/?/,'').split('/');return{v:h[0]||'today',p:h[1]||''}}
-function render(){applyTheme();const R=route(),focus=!!(SES||QZ);document.body.classList.toggle('focus',focus);
+function render(){applyTheme();const R=route(),focus=!!(SES||QZ||ST||SPICK);document.body.classList.toggle('focus',focus);
 const cur=R.v=='w'?'words':R.v;
 $('#nav').innerHTML=`<a class="brand" href="#/" aria-label="Vocab 500: Today"><img src="icon.svg" alt=""><span>Vocab<b>500</b></span></a>`+NAV.map(([k,l,ic])=>`<a href="#/${k=='today'?'':k}" class="ni${cur==k?' on':''}"${cur==k?' aria-current="page"':''}><svg viewBox="0 0 24 24" aria-hidden="true">${ic}</svg><span>${l}</span></a>`).join('');
-let h;if(SES)h=vSession();else if(QZ)h=vQuizRun();else h=({today:vToday,learn:vLearn,quiz:vQuiz,diff:vDiff,words:vWords,w:vWord,settings:vSettings}[R.v]||vToday)(R.p);
+let h;if(SES)h=vSession();else if(QZ)h=vQuizRun();else if(ST)h=vSentRun();else if(SPICK)h=vSentPick();else h=({today:vToday,learn:vLearn,quiz:vQuiz,diff:vDiff,words:vWords,w:vWord,settings:vSettings}[R.v]||vToday)(R.p);
 $('#main').innerHTML=h}
 
 // Today: the day's study, the 500-word map
@@ -166,14 +166,17 @@ ${rangePicker('learn')}
 <div class="startbar"><p>${pl(ns.length,'word')}${ready.length<ns.length?`, ${ready.length} written so far`:''}</p><button class="go" data-act="learn"${ready.length?'':' disabled'}>Start</button></div>`}
 
 // Quiz: which words, how many questions, what kind
-const QO={count:10,weak:false,close:true};
+const QO={count:10,weak:false,close:true,fam:true};
 function vQuiz(){const ns=rangeNums('quiz').filter(has),weak=ns.filter(n=>level(n)==1);
-return `<h1 class="title">Quiz</h1><p class="lead">A mix of questions: the word to its Bangla meaning, Bangla to the word, the English meaning, fill in the blank, and close words.</p>
+return `<h1 class="title">Quiz</h1><p class="lead">A mix of questions: the word to its Bangla meaning, Bangla to the word, the English meaning, fill in the blank, close words, and word family (noun / verb / adjective / adverb).</p>
 ${rangePicker('quiz')}
 <div class="qopts"><div class="plabel">Questions</div><div class="days">${[5,10,20,30,50].map(c=>`<button class="chip${QO.count==c?' on':''}" data-act="qc" data-c="${c}">${bn(c)}</button>`).join('')}</div>
 <label class="tick"><input type="checkbox" data-act="qw"${QO.weak?' checked':''}> Only words I'm still learning <small>(${weak.length})</small></label>
-<label class="tick"><input type="checkbox" data-act="qcl"${QO.close?' checked':''}> Include close-word questions</label></div>
-<div class="startbar"><p>From ${pl(ns.length,'word')}</p><button class="go" data-act="quiz"${ns.length?'':' disabled'}>Start quiz</button></div>`}
+<label class="tick"><input type="checkbox" data-act="qcl"${QO.close?' checked':''}> Include close-word questions</label>
+<label class="tick"><input type="checkbox" data-act="qfm"${QO.fam?' checked':''}> Include word-family questions <small>(noun? adjective? …)</small></label></div>
+<div class="startbar"><p>From ${pl(ns.length,'word')}</p><button class="go" data-act="quiz"${ns.length?'':' disabled'}>Start quiz</button></div>
+<div class="sentbox"><h2 class="sub">Write sentences <small>(বাক্য গঠন)</small></h2><p class="lead">Make your own sentence with each word. The grammar is checked for free online (LanguageTool); then compare the meaning with the book's example, or ask Google${hasAI()?' or Chrome’s built-in AI':''}.</p>
+<div class="startbar"><p>${pl(Math.min(QO.count,ns.length),'word')} from this part</p><button class="go" data-act="sent"${ns.length?'':' disabled'}>Start writing</button></div></div>`}
 
 // Close words
 function vDiff(g){if(g&&WD_CONF[g])return `<a class="backlink" href="#/diff">← All close words</a><h1 class="title">${esc(WD_CONF[g].t)}</h1>${groupHtml(g,'')}<div class="startbar"><p>${pl(WD_CONF[g].q.length,'question')}</p><button class="go" data-act="gquiz" data-g="${g}">Quiz these</button></div>`;
@@ -198,10 +201,20 @@ return `<div class="wnav"><a class="backlink" href="#/words">← Word list</a><s
 <article class="card open">${cardHead(n,true)}${backHtml(n)}
 ${has(n)?`<div class="state"><span>${LEVEL[level(n)]}${r?`, next review ${r.due<=today()?'today':dayDiff(today(),r.due)==1?'tomorrow':'in '+dayDiff(today(),r.due)+' days'}`:''}</span><span>${r?'':`<button class="ghost sm" data-act="add" data-n="${n}">Add to today</button>`}<button class="ghost sm" data-act="known" data-n="${n}">I know this</button></span></div>`:''}</article>`}
 
+// the backup line in Settings: on/off when both keys are there, otherwise how to add the second key
+function vBackup(){const m=AI.prov,b=aiAlt(m);if(!aiOn())return'';
+if(!aiReady(b))return `<p class="aimsg">Tip: add a ${AINAME[b]} key too (tap ${AINAME[b]} above, paste the key, then tap ${AINAME[m]} again). It then steps in when ${AINAME[m]} is busy or out of its free limit, and can give a second opinion on a sentence.</p>`;
+return `<h3 class="aih">Backup</h3><p class="aimsg">When ${AINAME[m]} is busy or out of its free limit, ${AINAME[b]} (${esc(mOf(b))}) checks the sentence instead.</p>
+<div class="days">${[[1,'On'],[0,'Off']].map(([v,l])=>`<button class="chip${(AIS.backup!==false)==!!v?' on':''}" data-act="aiback" data-v="${v}">${l}</button>`).join('')}</div>`}
 function vSettings(){const th=[['system','Same as device'],['light','Light'],['dark','Dark']];
 return `<h1 class="title">Settings</h1>
 <section class="set"><h2>New words a day</h2><p>Each day brings this many new words: with 10, Day 1 is #1–10. Days 1–6 of a week are new words, Day 7 revises the whole week. More new words also means more reviews.</p><div class="days">${[5,10,15,20].map(c=>`<button class="chip${S.daily==c?' on':''}" data-act="daily" data-c="${c}">${c}</button>`).join('')}</div></section>
 <section class="set"><h2>Theme</h2><div class="days">${th.map(([v,l])=>`<button class="chip${S.theme==v?' on':''}" data-act="theme" data-v="${v}">${l}</button>`).join('')}</div></section>
+<section class="set"><h2>AI check for your sentences</h2><p>With a free API key the sentence test also checks the meaning and whether it sounds natural. Google AI Studio (aistudio.google.com) and GroqCloud (console.groq.com) give keys free, no card. Each key is saved in this browser only (not in the progress file), so you paste it once. The one you choose here is the main AI; with keys for both, the other one is the backup.</p>
+<div class="days">${[['','Off'],['gemini','Google Gemini'],['groq','Groq']].map(([v,l])=>`<button class="chip${(AI.prov||'')==v?' on':''}" data-act="aiprov" data-v="${v}">${l}</button>`).join('')}</div>
+${AI.prov?`<div class="aiset"><input id="aikey" type="password" autocomplete="off" placeholder="Paste your ${AI.prov=='gemini'?'Gemini':'Groq'} API key" value="${esc(AI.key||'')}"><button class="ghost sm" data-act="aimodels">Save &amp; load models</button></div>
+${AIM.list?`<label class="aimodel">Model <select id="aimodel">${AIM.list.map(m=>`<option${m==AI.model?' selected':''}>${esc(m)}</option>`).join('')}</select></label>`:AI.model?`<p class="aimodel">Model: <b>${esc(AI.model)}</b></p>`:''}
+${aiQ(AI.prov,aiBack())}${AIM.msg?`<p class="aimsg">${esc(AIM.msg)}</p>`:''}${AI.key&&AI.model?`<button class="ghost sm" data-act="aitest">Test it</button>`:''}${vBackup()}`:''}</section>
 <section class="set"><h2>Move your progress to another device</h2><p>Progress is kept in this browser. Save it to a file and open that file on the other device.</p><div class="days"><button class="ghost" data-act="export">Save to file</button><button class="ghost" data-act="import">Load from file</button></div></section>
 <section class="set"><h2>Start over</h2><p>This erases the record of every word you have studied.</p><button class="ghost danger" data-act="reset">Erase progress</button></section>`}
 
@@ -227,31 +240,207 @@ return `<div class="end"><h1 class="title">${s.rev?`Week ${s.rev} revised`:s.kin
 <div class="chips">${s.seen.map(n=>`<a class="wchip lv${level(n)}" href="#/w/${n}">${esc(VWL[n-1])}</a>`).join('')}</div>
 <div class="endbtns"><button class="ghost" data-act="done">Done</button><button class="go" data-act="check">Test these (quiz)</button></div></div>`}
 
+// ---------- AI (the learner's own free key: Gemini or Groq) ----------
+// kept apart from S, so a saved progress file never carries the key
+// each service keeps its own key and model, so switching between them never loses a key
+const AIKEY='vocab500-ai';let AIS={};try{AIS=JSON.parse(localStorage.getItem(AIKEY)||'{}')||{}}catch(e){}
+if(!AIS.keys){const o=AIS;AIS={prov:o.prov||'',keys:{},models:{}};if(o.prov&&o.key){AIS.keys[o.prov]=o.key;AIS.models[o.prov]=o.model||''}}
+const AI={get prov(){return AIS.prov||''},set prov(v){AIS.prov=v},get key(){return AIS.keys[AIS.prov]||''},set key(v){AIS.keys[AIS.prov]=v},
+get model(){return AIS.models[AIS.prov]||''},set model(v){AIS.models[AIS.prov]=v}};
+const AIM={list:null,msg:''};
+const saveAI=()=>{try{localStorage.setItem(AIKEY,JSON.stringify(AIS))}catch(e){}};
+const AINAME={gemini:'Google Gemini',groq:'Groq'},aiReady=p=>!!(AIS.keys[p]&&AIS.models[p]);
+const aiOn=()=>!!(AI.prov&&AI.key&&AI.model);
+const GEM='https://generativelanguage.googleapis.com/v1beta/',GROQ='https://api.groq.com/openai/v1/';
+async function aiModels(){const r=AI.prov=='gemini'?await fetch(GEM+'models?pageSize=1000',{headers:{'x-goog-api-key':AI.key}}):await fetch(GROQ+'models',{headers:{Authorization:'Bearer '+AI.key}});
+if(!r.ok)throw new Error(r.status==400||r.status==401||r.status==403?'The key was not accepted':'Could not reach the service ('+r.status+')');const j=await r.json();
+if(AI.prov=='gemini')return j.models.filter(m=>(m.supportedGenerationMethods||[]).includes('generateContent')&&/^models\/gemini/.test(m.name)&&!/(embed|tts|image|audio|live|vision|robotics|computer)/.test(m.name)).map(m=>m.name.slice(7));
+return j.data.filter(m=>m.active!==false&&!/(whisper|tts|guard|playai|orpheus|prompt)/i.test(m.id)).map(m=>m.id).sort()}
+// a sensible first choice from the list: a fast "flash" or a large instruction model
+// Gemini: the newest stable "flash-lite" (its free tier allows hundreds of checks a day; full "flash" only about 20),
+// then "flash"; never preview or exp. The list comes oldest first.
+const gemV=m=>parseFloat((m.match(/gemini-(\d+(?:\.\d+)?)/)||[])[1])||0,newest=l=>l.slice().sort((a,b)=>gemV(b)-gemV(a))[0];
+const aiPick=l=>AI.prov=='gemini'?(newest(l.filter(m=>/^gemini-[\d.]+-flash-lite$/.test(m)))||newest(l.filter(m=>/^gemini-[\d.]+-flash$/.test(m)))||newest(l.filter(m=>/flash/.test(m)))||l[0]):(l.find(m=>/gpt-oss-120b/.test(m))||l.find(m=>/llama-3\.3-70b/.test(m))||l.find(m=>/qwen/.test(m))||l.find(m=>/gpt-oss|llama/.test(m))||l[0]);
+// how much of the free limit is left, per service and model. Groq sends the real numbers in its reply headers;
+// Gemini sends nothing, so the app counts its own checks and learns the daily limit from Gemini's "limit reached" reply.
+// The day follows US Pacific time, as both free limits do (Gemini's resets at midnight there).
+// Every helper takes the service (p), since a check can go to the main AI, the backup, or both.
+const ptNow=()=>{const n=new Date();return new Date(n.toLocaleString('en-US',{timeZone:'America/Los_Angeles'}))};
+const ptDay=()=>{const d=ptNow();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`};
+const ptReset=()=>{const la=ptNow(),nx=new Date(la);nx.setHours(24,0,0,0);return new Date(Date.now()+(nx-la)).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})};
+const mOf=p=>AIS.models[p]||'',uKey=p=>p+':'+mOf(p);
+function aiU(p){const d=ptDay();if(!AIS.use||AIS.use.d!==d)AIS.use={d,m:{}};const k=uKey(p);return AIS.use.m[k]||(AIS.use.m[k]={n:0,tok:0})}
+const aiLim=p=>(AIS.lim||(AIS.lim={}))[uKey(p)]||(AIS.lim[uKey(p)]={});
+// Groq's "2m59.5s" / "7.66s" / "120ms" → seconds
+const durS=s=>{if(!s)return 0;let t=0;String(s).replace(/([\d.]+)(ms|h|m|s)/g,(_,v,u)=>{t+=v*({ms:.001,s:1,m:60,h:3600})[u]});return Math.ceil(t)};
+const durTxt=s=>s<60?pl(s,'second'):s<3600?pl(Math.ceil(s/60),'minute'):pl(Math.round(s/3600),'hour');
+const num=x=>x==null||x===''||isNaN(x)?null:+x;
+function groqHead(r){const h=k=>r.headers.get('x-ratelimit-'+k),u=aiU('groq'),left=num(h('remaining-requests'));
+if(left==null)return;u.left=left;u.max=num(h('limit-requests'));u.tleft=num(h('remaining-tokens'));u.tmax=num(h('limit-tokens'))}
+// an error that says whether trying the other service makes sense (busy, out of limit, no internet) or not (bad key)
+const aiErr=(msg,swap)=>Object.assign(new Error(msg),{swap});
+async function aiFail(r,p){const g=p=='gemini',other=g?'Groq':'Gemini',M=mOf(p);
+if(r.status>=500)return aiErr(`${AINAME[p]} is busy right now (error ${r.status}; not a limit). Try again in a little while.`,1);
+if(r.status!=429)return aiErr(r.status==400||r.status==401||r.status==403?`${AINAME[p]} did not accept the key or model (error ${r.status}); check Settings.`:`${AINAME[p]} error ${r.status}`,r.status==404);
+const u=aiU(p),l=aiLim(p);let j={};try{j=await r.json()}catch(e){}
+if(g){const det=j.error?.details||[],v=(det.find(x=>/QuotaFailure/.test(x['@type']))?.violations||[])[0]||{},wait=durS(det.find(x=>/RetryInfo/.test(x['@type']))?.retryDelay);
+const q=v.quotaId||'',lim=num(v.quotaValue);
+if(/PerDay/i.test(q)){if(lim)l.day=lim;u.out=1;saveAI();return aiErr(`Today's free limit for ${M}${lim?` (${lim} checks)`:''} is used up. It starts again at ${ptReset()}. Meanwhile pick another model in Settings, or use ${other}.`,1)}
+saveAI();return aiErr(`Too many checks this minute${lim?` (the free limit is ${lim})`:''}. Try again in ${durTxt(wait||60)}.`,1)}
+groqHead(r);const ra=num(r.headers.get('retry-after')),msg=String(j.error?.message||'');
+if(/per day|\(RPD\)|\(TPD\)/i.test(msg)){u.out=1;saveAI();return aiErr(`Today's free limit for ${M} on Groq is used up${ra?`; it opens again in ${durTxt(ra)}`:''}. Meanwhile pick another model in Settings, or use ${other}.`,1)}
+saveAI();return aiErr(`Too many checks this minute. Try again in ${durTxt(ra||durS((msg.match(/try again in ([\d.hms]+)/i)||[])[1])||60)}.`,1)}
+// one short line for the screen: what is left today, and the tokens used
+function aiQuota(p){const u=aiU(p),l=aiLim(p),M=mOf(p),tk=u.tok?` · ${u.tok.toLocaleString()} tokens used today`:'',h=`${AINAME[p]} · ${M}: `;
+if(u.left!=null&&p=='groq')return h+`${u.left.toLocaleString()}${u.max?' of '+u.max.toLocaleString():''} checks left today${u.tleft!=null?` · ${u.tleft.toLocaleString()}${u.tmax?' of '+u.tmax.toLocaleString():''} tokens left this minute`:''}${tk}`;
+if(u.out)return h+`today's free limit is used up (starts again at ${ptReset()})${tk}`;
+if(l.day)return h+`about ${Math.max(0,l.day-u.n)} of ${l.day} checks left today (resets ${ptReset()})${tk}`;
+return h+`${pl(u.n,'check')} today${tk}${p=='gemini'?'. Gemini does not say how many are left; the app learns the daily limit the first time it is reached.':''}`}
+// the limit lines for the given services (only those with a key and model)
+const aiQ=(...ps)=>[...new Set(ps.length?ps:[AI.prov])].filter(p=>p&&aiReady(p)).map(p=>`<p class="aiq">${esc(aiQuota(p))}</p>`).join('');
+// the backup: the other service, when it has a key and the backup is not turned off
+const aiAlt=p=>p=='gemini'?'groq':p=='groq'?'gemini':'',aiBack=()=>{const b=aiAlt(AI.prov);return aiOn()&&AIS.backup!==false&&aiReady(b)?b:''};
+const wait=ms=>new Promise(f=>setTimeout(f,ms));
+async function aiCall(prompt,p){const u=aiU(p),M=mOf(p),K=AIS.keys[p];let r;
+try{r=p=='gemini'?await fetch(GEM+'models/'+encodeURIComponent(M)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':K},
+body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',temperature:.2}})})
+:await fetch(GROQ+'chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+K},
+body:JSON.stringify({model:M,temperature:.2,response_format:{type:'json_object'},messages:[{role:'user',content:prompt}]})})}
+catch(e){throw aiErr(`Could not reach ${AINAME[p]}; check the internet.`,1)}
+if(!r.ok)throw await aiFail(r,p);const j=await r.json();u.n++;u.out=0;
+if(p=='gemini'){u.tok+=j.usageMetadata?.totalTokenCount||0;saveAI();return((j.candidates||[])[0]?.content?.parts||[]).filter(x=>!x.thought).map(x=>x.text||'').join('')}
+groqHead(r);u.tok+=j.usage?.total_tokens||0;saveAI();return j.choices[0].message.content}
+// one service, with a single quiet retry when it is only busy (Gemini's 503 "overloaded" comes and goes within seconds)
+async function aiAsk(prompt,p=AI.prov){try{return await aiCall(prompt,p)}catch(e){if(!/busy/.test(e.message))throw e;await wait(2000);return aiCall(prompt,p)}}
+const sentPrompt=(w,d,t)=>`You are an English teacher for a Bangladeshi student preparing for a vocabulary exam.
+The student wrote a sentence to practise the word "${w}" (${d.pos}; meaning: ${d.en}; Bangla: ${d.bn}).
+Sentence: "${t}"
+Judge it. Reply with JSON only, in this shape:
+{"verdict":"correct" | "minor" | "wrong",
+ "uses_word":true|false, "meaning_ok":true|false, "grammar_ok":true|false, "natural":true|false,
+ "feedback":"2-3 short sentences in simple Bangla (Bengali script; English words may stay in English): what is right or wrong with the use of the word, the grammar and how natural it sounds",
+ "better":"the student's sentence rewritten: corrected if it has mistakes, otherwise a more polished, exam-level version of the same idea (still using ${w} or a form of it)"}
+"correct" = the word is used in the right meaning and the sentence is grammatical and natural; "minor" = right meaning but small grammar or style problems; "wrong" = the word is missing or used in a wrong meaning, or the sentence makes no sense.`;
+function aiParse(s){const m=String(s).match(/\{[\s\S]*\}/);const o=JSON.parse(m?m[0]:s);return{v:['correct','minor','wrong'].includes(o.verdict)?o.verdict:'minor',fb:String(o.feedback||''),better:String(o.better||''),
+flags:[['uses_word','word used'],['meaning_ok','meaning'],['grammar_ok','grammar'],['natural','natural']].filter(([k])=>typeof o[k]=='boolean').map(([k,l])=>[l,o[k]])}}
+
+// ---------- sentence making ----------
+// ST = {ns, i, text, res: null | {grammar: 'wait'|'off'|[matches], has: bool, ai?}, ok, bad}
+// grammar: LanguageTool's free public API (no key; about 20 checks a minute). Meaning: the learner compares with
+// the book's example and marks it; Google or Chrome's built-in AI (when the browser has it) can give a second opinion.
+const hasAI=()=>typeof LanguageModel!='undefined';
+const stemOf=w=>w.replace(/(e|y)$/,'').slice(0,Math.max(4,Math.min(w.length-1,6)));
+const usesWord=(n,t)=>{const ws=t.toLowerCase().match(/[a-z-]+/g)||[];return family(n).some(x=>[x.w,...x.alt].some(f=>{const st=stemOf(f);return ws.some(y=>y.startsWith(st))}))};
+function startSent(from){const ns=shuffle(from.filter(has)).slice(0,QO.count);if(!ns.length){toast('No words in this part');return}ST={ns,from,i:0,text:'',res:null,ok:0,bad:[]};scrollTo(0,0)}
+async function checkSent(){const z=ST,t=z.text.trim(),n=z.ns[z.i];if(!t)return;z.res={grammar:'wait',has:usesWord(n,t)};render();if(aiOn())aiSent();
+try{const r=await fetch('https://api.languagetool.org/v2/check',{method:'POST',body:new URLSearchParams({text:t,language:'en-US'})});if(!r.ok)throw 0;
+const j=await r.json();if(ST!==z||!z.res)return;z.res.grammar=j.matches.map(m=>({o:m.offset,l:m.length,msg:m.message,fix:m.replacements.slice(0,3).map(x=>x.value)}))}
+catch(e){if(ST!==z||!z.res)return;z.res.grammar='off'}render()}
+const aiErrTxt=e=>e instanceof SyntaxError?'The AI gave an answer the app could not read; try again.':e.message||'The AI check failed.';
+const aiErrOf=(p,e)=>{const t=aiErrTxt(e);return t.includes(AINAME[p])||t.includes(mOf(p))?t:`${AINAME[p]}: ${t}`};
+const aiJudge=async(z,p)=>{const n=z.ns[z.i];return{...aiParse(await aiAsk(sentPrompt(VWL[n-1],D(n),z.text.trim()),p)),by:p}};
+// the main AI checks; if it is busy, out of its limit or offline (or answers in a broken form), the backup checks instead
+async function aiSent(){const z=ST,n=z.ns[z.i],d=D(n),w=VWL[n-1];if(!z.res)return;Object.assign(z.res,{ai:'…',aj:null,aj2:null,ai2:'',note:''});render();
+if(aiOn()){const m=AI.prov,b=aiBack();let a=null,msg='',note='';
+try{a=await aiJudge(z,m)}catch(e){msg=aiErrOf(m,e);if(b&&(e.swap||e instanceof SyntaxError)){if(ST===z&&z.res){z.res.ai=`${msg} Asking ${AINAME[b]} instead…`;render()}
+try{a=await aiJudge(z,b);note=`${msg} So ${AINAME[b]} checked it instead.`}catch(e2){msg+=' '+aiErrOf(b,e2)}}}
+if(ST===z&&z.res){if(a){z.res.ai='';z.res.aj=a;z.res.note=note}else z.res.ai=msg}render();return}
+try{if(await LanguageModel.availability()=='unavailable')throw 0;const m=await LanguageModel.create();
+const a=await m.prompt(`A student learning English vocabulary wrote this sentence to practise the word "${w}" (${d.pos}: ${d.en}).\nSentence: "${z.text.trim()}"\nIs "${w}" used with the right meaning, and is the sentence grammatical? Answer in at most 3 short lines: first "Correct" or "Not correct", then why, then a corrected sentence if needed.`);
+if(ST===z)z.res.ai=a.trim()}catch(e){if(ST===z)z.res.ai='Chrome\'s built-in AI is not ready on this device.'}render()}
+// a second opinion: the other service checks the same sentence, and both answers show side by side
+async function aiSent2(){const z=ST,r=z.res;if(!r||!r.aj)return;const p=aiAlt(r.aj.by);if(!aiReady(p))return;r.ai2='…';render();
+try{const a=await aiJudge(z,p);if(ST===z&&z.res===r){r.aj2=a;r.ai2=''}}catch(e){if(ST===z&&z.res===r)r.ai2=aiErrOf(p,e)}render()}
+// the word's other examples in its close-word groups (no repeats of the main one)
+const bookEx=n=>{const w=VWL[n-1],seen=new Set([D(n).ex.trim()]),out=[];groupsOf(n).forEach(g=>WD_CONF[g].w.forEach(x=>{if(x.w==w&&!seen.has(x.ex.trim())){seen.add(x.ex.trim());out.push(x.ex)}}));return out};
+function hlText(t,ms){let out='',at=0;[...ms].sort((a,b)=>a.o-b.o).forEach(m=>{if(m.o<at)return;out+=esc(t.slice(at,m.o))+`<span class="gerr">${esc(t.slice(m.o,m.o+m.l))||'&nbsp;'}</span>`;at=m.o+m.l});return out+esc(t.slice(at))}
+// before the test: which AI checks the sentences (or none); a missing key can be pasted right here
+function vSentPick(){const ch=[['gemini',AINAME.gemini],['groq',AINAME.groq],['','No AI']],p=AI.prov,ok=!p||aiReady(p);
+const note=v=>!v?'Grammar check and the book\'s examples only':aiReady(v)?`Key saved · ${AIS.models[v]}${AIS.backup!==false&&aiReady(aiAlt(v))?` · backup: ${AINAME[aiAlt(v)]}`:''}`:'No key yet';
+return `<div class="sbar"><button class="x" data-act="sback" aria-label="Back">✕</button><div class="prog"><span style="width:0"></span></div><span class="cnt">${pl(Math.min(QO.count,rangeNums('quiz').filter(has).length),'word')}</span></div>
+<article class="card q"><p class="qk">Write sentences</p><p class="qs">Which AI should check your sentences?</p>
+<div class="opts">${ch.map(([v,l],i)=>`<button class="opt${p==v?' right':''}" data-act="aiprov" data-v="${v}"><kbd>${bn(i+1)}</kbd><span>${l}<small class="optnote">${esc(note(v))}</small></span></button>`).join('')}</div>
+${p&&!aiReady(p)?`<div class="aiset"><input id="aikey" type="password" autocomplete="off" placeholder="Paste your ${AINAME[p]} API key"><button class="ghost sm" data-act="aimodels">Save key</button></div>
+<p class="aimsg">${esc(AIM.msg||(p=='gemini'?'Get one free at aistudio.google.com (API keys).':'Get one free at console.groq.com/keys.'))}</p>`:AIM.msg?`<p class="aimsg">${esc(AIM.msg)}</p>`:''}
+${p&&aiReady(p)?`${aiQ(p,aiBack())}<p class="aimsg"><a href="#/settings">Change the key or model in Settings</a></p>`:''}</article>
+<div class="actions"><button class="go wide" data-act="sgo"${ok?'':' disabled'}>Start writing</button><p class="keys">Keys: 1–3, Enter</p></div>`}
+function vSentRun(){const z=ST,T=z.ns.length;if(z.i>=T)return vSentEnd();const n=z.ns[z.i],d=D(n),w=VWL[n-1],r=z.res,t=z.text.trim();
+let out='';if(r){const g=r.grammar;
+out=`<div class="why ${r.has&&Array.isArray(g)&&!g.length?'ok':Array.isArray(g)&&!g.length&&!r.has?'bad':g=='wait'||g=='off'?'':'bad'}">
+<p class="verdict"${r.has?' style="color:var(--good)"':''}>${r.has?'✓ Uses the word':'✗ The word "'+esc(w)+'" (or a form of it) is not in the sentence'}</p>
+${g=='wait'?'<p class="tip">Checking grammar…</p>':g=='off'?'<p class="tip">Grammar check needs the internet (or the free limit is reached; wait a minute).</p>':!g.length?'<p class="verdict" style="color:var(--good)">✓ No grammar or spelling mistakes found</p>':
+`<p class="verdict">${pl(g.length,'grammar point')}</p><p class="mine">${hlText(t,g)}</p><ul class="gl">${g.map(m=>`<li>${esc(m.msg)}${m.fix.length?` → <b>${m.fix.map(esc).join(' / ')}</b>`:''}</li>`).join('')}</ul>`}</div>
+<div class="model"><p class="qk">Examples from the book: does your sentence use it like these?</p><p><b>${esc(w)}</b>: ${esc(d.bn)}</p><p class="ex">${mark(d.ex,w)}</p><p class="tip">${esc(d.exb)}</p>
+${bookEx(n).map(x=>`<p class="ex more">${mark(x,w)}</p>`).join('')}
+<div class="aibar"><button class="ghost sm" data-act="sgoogle">Ask Google</button>${aiOn()?`<button class="ghost sm" data-act="sai">${r.aj?'Ask AI again':'Ask AI'}</button>${r.aj&&!r.aj2&&r.ai2!='…'&&aiReady(aiAlt(r.aj.by))?`<button class="ghost sm" data-act="sai2">Ask ${AINAME[aiAlt(r.aj.by)]} too</button>`:''}`:hasAI()?`<button class="ghost sm" data-act="sai">Ask Chrome AI</button>`:`<a class="ghost sm" href="#/settings">Set up AI check</a>`}</div>
+${r.ai?`<p class="ai">${r.ai=='…'?'AI is checking…':esc(r.ai)}</p>${r.ai!='…'&&!r.aj?aiQ(AI.prov,aiBack()):''}`:''}${r.ai2?`<p class="ai">${r.ai2=='…'?`${AINAME[aiAlt(r.aj.by)]} is checking…`:esc(r.ai2)}</p>`:''}</div>`;
+if(r.aj){const a=r.aj,b=r.aj2,two=!!b;
+const box=(a,lab)=>`<div class="why aiv ${a.v=='correct'?'ok':'bad'}"><p class="verdict"${a.v=='minor'?' style="color:var(--hard)"':''}>${lab}: ${a.v=='correct'?'✓ Correct and natural':a.v=='minor'?'Almost: small problems':'✗ Not correct'}</p>
+${a.flags.length?`<p class="flags">${a.flags.map(([l,ok])=>`<span class="${ok?'y':'n'}">${ok?'✓':'✗'} ${l}</span>`).join('')}</p>`:''}<p class="tip">${esc(a.fb)}</p></div>`;
+const sug=(a,lab)=>a.better?`<p class="qk">${lab}${a.better.trim()==t?'Your sentence is already good':a.v=='correct'?'Your sentence, a little more polished':'Your sentence, corrected'}</p><p class="better">${mark(a.better,w)}</p>`:'';
+const sb=b&&b.better&&b.better.trim()!=a.better.trim()?sug(b,AINAME[b.by]+': '):'';
+out=`${r.note?`<p class="ainote">${esc(r.note)}</p>`:''}${box(a,two?AINAME[a.by]:'AI')}${two?box(b,AINAME[b.by]+' (second opinion)'):''}
+${two&&a.v!=b.v?`<p class="ainote">The two AIs do not agree. Compare with the book's examples below and decide.</p>`:''}${aiQ(a.by,two?b.by:'')}
+${a.better||sb?`<div class="aisug">${sug(a,two?AINAME[a.by]+': ':'')}${sb}</div>`:''}`+out}}
+return `<div class="sbar"><button class="x" data-act="squit" aria-label="Stop">✕</button><div class="prog"><span style="width:${Math.round(z.i/T*100)}%"></span></div><span class="cnt">${z.i+1}/${T}</span></div>
+<article class="card q"><p class="qk">Make a sentence with this word (বাক্য গঠন করো)</p><p class="qw">${esc(w)} ${sayBtn(w)}</p>
+<textarea id="stext" rows="3" spellcheck="false" autocorrect="off" autocomplete="off" autocapitalize="sentences" placeholder="Write your sentence here…"${r?' readonly':''}>${esc(z.text)}</textarea>${out}</article>
+<div class="actions">${!r?`<button class="go wide" data-act="scheck"${t?'':' disabled'}>Check</button><p class="keys">Key: Ctrl+Enter</p>`:
+`<div class="endbtns"><button class="ghost" data-act="sedit">Change it</button>${r.aj&&r.aj.v=='wrong'?`<button class="ghost" data-act="smark" data-ok="1">It's right</button><button class="go danger" data-act="smark" data-ok="0">It was wrong</button>`:`<button class="ghost danger" data-act="smark" data-ok="0">It was wrong</button><button class="go" data-act="smark" data-ok="1">It's right</button>`}</div>`}</div>`}
+function vSentEnd(){const z=ST,T=z.ns.length,wn=[...new Set(z.bad)];
+return `<div class="end"><p class="score"><b>${bn(z.ok)}</b>/${bn(T)}</p><h1 class="title">${z.ok==T?'All correct':'Good practice'}</h1>
+<p class="lead">${wn.length?`The ${pl(wn.length,'word')} you got wrong come back in today's review.`:'Every sentence was right.'}</p>
+${wn.length?`<div class="list">${wn.map(n=>`<a class="li" href="#/w/${n}"><span class="num">${bn(n)}</span><b>${esc(VWL[n-1])}</b><span class="m">${esc(D(n).bn)}</span></a>`).join('')}</div>`:''}
+<div class="endbtns"><button class="ghost" data-act="sdone">Done</button><button class="go" data-act="sagain">More words</button></div></div>`}
+
 // ---------- quiz ----------
 // kinds: wb word → Bangla · bw Bangla → word · ew English meaning → word · fb fill the blank · cf close words
+//        ps part of speech of a word in the family · wf word family: "abate (verb) → its noun?"
+const POSN={n:'noun',v:'verb',adj:'adjective',adv:'adverb'},POSB={noun:'বিশেষ্য',verb:'ক্রিয়া',adjective:'বিশেষণ',adverb:'ক্রিয়াবিশেষণ'};
+const POSL=p=>`${p} · ${POSB[p]}`;
+// a word's family from its "forms": "abridgement / abridgment (n): … · abridged (adj)" → [{w,alt,p:[…]}], the word itself first
+const FAM={};
+function family(n){if(FAM[n])return FAM[n];const d=D(n),out=[{w:VWL[n-1],alt:[],p:d.pos.split(',').map(x=>x.trim()).filter(x=>POSB[x]),base:true}];
+(d.forms||'').split(' · ').forEach(s=>{const m=s.match(/^([^():]+?)\s*\(([^)]+)\)/);if(!m)return;const ws=m[1].split('/').map(x=>x.trim().toLowerCase()).filter(Boolean),
+p=[...new Set(m[2].split(/[,\/]/).map(x=>POSN[x.trim()]).filter(Boolean))];if(p.length&&ws.length&&!ws.some(x=>/\s/.test(x)))out.push({w:ws[0],alt:ws.slice(1),p,bn:s.split(':').slice(1).join(':').trim()})});
+return FAM[n]=out}
+// made-up wrong forms to fill the options when the family is small: abate → abation, abatity …
+const FAKE={noun:['ion','ity','ure','ism','al','ery'],adjective:['ous','ful','ic','ish','ant','al'],verb:['ize','ify','ate','en'],adverb:['ally','ously','ively','wise','ward']};
+function fakes(fam,t,k,ans){const all=new Set(fam.flatMap(x=>[x.w,...x.alt]));const out=[];
+const w=fam[0].w,st=w.replace(/(ness|ment|ion|ity|ous|ive|ful|ate|ize|ent|ant|ance|ence|ism|al|ic|y|e)$/,'');
+for(const suf of shuffle(FAKE[t].slice()))for(const f of [st+suf,w+suf])if(f.length>st.length+1&&f!=w&&!all.has(f)&&!out.includes(f)&&!/(.)\1\1/.test(f)&&f.slice(-3)!=ans.slice(-3)){out.push(f);if(out.length>=k)return out;break}return out}
+function psItem(n){const ms=family(n).filter(x=>x.p.length==1);if(!ms.length)return null;const m=ms[Math.floor(Math.random()*ms.length)];
+return{kind:'ps',n,prompt:m.w,sub:m.base?'':`(${VWL[n-1]} পরিবারের শব্দ)`,opts:['noun','verb','adjective','adverb'].map(POSL),ans:POSL(m.p[0])}}
+function wfItem(n){const fam=family(n),base=fam[0];if(!base.p.length)return null;
+const ok=fam.filter(x=>!x.base&&x.w!=base.w&&x.p.length==1&&!base.p.includes(x.p[0])&&fam.filter(y=>!y.base&&y.p.includes(x.p[0])).length==1);if(!ok.length)return null;
+const m=ok[Math.floor(Math.random()*ok.length)],t=m.p[0];
+const wrong=shuffle(fam.filter(x=>x!=m&&!x.p.includes(t)).map(x=>x.w)).slice(0,3);wrong.push(...fakes(fam,t,3-wrong.length,m.w));if(wrong.length<3)return null;
+return{kind:'wf',n,q:`What is its ${t}? (${POSB[t]} রূপ কোনটি?)`,prompt:base.w,sub:base.p.join(', '),opts:shuffle([m.w,...wrong.slice(0,3)]),ans:m.w}}
+const famLine=n=>family(n).map(x=>`${x.w} (${x.p.join(', ')})${x.bn?': '+x.bn:''}`).join(' · ');
 function cfItem(g,i){const G=WD_CONF[g],[s,a]=G.q[i];return{kind:'cf',g,n:(G.w.find(x=>x.w==a)||{}).n||0,prompt:s,opts:shuffle(G.w.map(x=>x.w)),ans:a}}
-function makeQuiz(ns,count,withClose){const pool=READY,Q=[],used=new Set(),kinds=['wb','bw','ew','fb'];
+function makeQuiz(ns,count,withClose,withFam=true){const pool=READY,Q=[],used=new Set(),kinds=['wb','bw','ew','fb',...(withFam?['ps','wf','wf']:[])];
 const others=n=>shuffle(pool.filter(x=>x!=n)).slice(0,3);
-const mc=(n,k)=>{const d=D(n),w=VWL[n-1],o=others(n);
+const mc=(n,k)=>{const d=D(n),w=VWL[n-1],o=others(n);if(k=='ps')return psItem(n);if(k=='wf')return wfItem(n);
 if(k=='wb')return{kind:k,n,prompt:w,opts:shuffle([d.bn,...o.map(x=>D(x).bn)]),ans:d.bn};
 return{kind:k,n,prompt:k=='bw'?d.bn:k=='ew'?d.en:d.fb,opts:shuffle([w,...o.map(x=>VWL[x-1])]),ans:w}};
 if(withClose){const gs=new Set();ns.forEach(n=>groupsOf(n).forEach(g=>gs.add(g)));const cf=[];gs.forEach(g=>WD_CONF[g].q.forEach((_,i)=>cf.push(cfItem(g,i))));
 shuffle(cf).slice(0,Math.round(count*.3)).forEach(x=>Q.push(x))}
 let order=shuffle(ns),j=0,guard=0;
-while(Q.length<count&&guard++<count*30){const n=order[j%order.length],k=kinds[Math.floor(Math.random()*4)];j++;if(j%order.length==0)order=shuffle(ns);
-if(used.has(k+n)&&used.size<ns.length*4)continue;used.add(k+n);Q.push(mc(n,k))}
+while(Q.length<count&&guard++<count*30){const n=order[j%order.length],k=kinds[Math.floor(Math.random()*kinds.length)];j++;if(j%order.length==0)order=shuffle(ns);
+if(used.has(k+n)&&used.size<ns.length*kinds.length)continue;const it=mc(n,k);if(!it)continue;used.add(k+n);Q.push(it)}
 return shuffle(Q)}
 function startQuiz(items,again){if(!items.length){toast('No words to quiz in this part');return}QZ={items,i:0,pick:null,right:0,wrong:[],again};scrollTo(0,0)}
-const QK={wb:'Which is its Bangla meaning?',bw:'Which word means this?',ew:'Which word has this meaning?',fb:'Which word fills the blank?',cf:'Close words: which one fits?'};
+const QK={wb:'Which is its Bangla meaning?',bw:'Which word means this?',ew:'Which word has this meaning?',fb:'Which word fills the blank?',cf:'Close words: which one fits?',ps:'What part of speech is it? (কোন পদ?)'};
 function vQuizRun(){const z=QZ,T=z.items.length;if(z.i>=T)return vQuizEnd();const it=z.items[z.i],ans=z.pick!=null,ok=ans&&it.opts[z.pick]==it.ans;
 const blank=s=>esc(s).replace('___','<span class="blank" aria-label="blank">&nbsp;</span>');
-const pr=it.kind=='wb'?`<p class="qw">${esc(it.prompt)} ${sayBtn(it.prompt)}</p>`:it.kind=='fb'||it.kind=='cf'?`<p class="qs">${blank(it.prompt)}</p>`:`<p class="qs">${esc(it.prompt)}</p>`;
+const pr=it.kind=='wb'||it.kind=='ps'||it.kind=='wf'?`<p class="qw">${esc(it.prompt)} ${sayBtn(it.prompt)}</p>${it.sub?`<p class="qsub">${esc(it.sub)}</p>`:''}`:it.kind=='fb'||it.kind=='cf'?`<p class="qs">${blank(it.prompt)}</p>`:`<p class="qs">${esc(it.prompt)}</p>`;
 const pct=Math.round(z.i/T*100);
 let why='';if(ans){if(it.kind=='cf'){const G=WD_CONF[it.g],x=G.w.find(y=>y.w==it.ans);why=`<b>${esc(it.ans)}</b>: ${esc(x.u)}<span class="tip">${esc(G.tip)}</span>`}
+else if(it.kind=='ps'||it.kind=='wf'){const d=D(it.n);why=`<b>${esc(VWL[it.n-1])}</b>: ${esc(d.bn)}<span class="tip">Family: ${esc(famLine(it.n))}</span>`}
 else{const d=D(it.n);why=`<b>${esc(VWL[it.n-1])}</b>: ${esc(d.bn)}<span class="tip">${esc(d.mn)}</span>`}}
 return `<div class="sbar"><button class="x" data-act="qquit" aria-label="Stop">✕</button><div class="prog"><span style="width:${pct}%"></span></div><span class="cnt">${z.i+1}/${T}</span></div>
-<article class="card q"><p class="qk">${QK[it.kind]}</p>${pr}
-<div class="opts${it.kind=='wb'?' bnopts':''}">${it.opts.map((o,i)=>{const c=!ans?'':o==it.ans?' right':i==z.pick?' wrong':' dim';return `<button class="opt${c}" data-act="pick" data-i="${i}"${ans?' disabled':''}><kbd>${bn(i+1)}</kbd><span>${esc(o)}</span></button>`}).join('')}</div>
+<article class="card q"><p class="qk">${esc(it.q||QK[it.kind])}</p>${pr}
+<div class="opts${it.kind=='wb'||it.kind=='ps'?' bnopts':''}">${it.opts.map((o,i)=>{const c=!ans?'':o==it.ans?' right':i==z.pick?' wrong':' dim';return `<button class="opt${c}" data-act="pick" data-i="${i}"${ans?' disabled':''}><kbd>${bn(i+1)}</kbd><span>${esc(o)}</span></button>`}).join('')}</div>
 ${ans?`<div class="why ${ok?'ok':'bad'}"><p class="verdict">${ok?'Right':'Not quite'}</p><p>${why}</p></div>`:''}</article>
 <div class="actions">${ans?`<button class="go wide" data-act="next">${z.i+1<T?'Next question':'See result'}</button><p class="keys">Key: Enter</p>`:`<p class="keys">Keys: 1–${it.opts.length}</p>`}</div>`}
 function vQuizEnd(){const z=QZ,T=z.items.length,pct=Math.round(z.right/T*100),wn=[...new Set(z.wrong.filter(has))];
@@ -281,19 +470,38 @@ case'check':{const ns=SES.seen;SES=null;startQuiz(makeQuiz(ns,Math.min(20,Math.m
 case'qc':QO.count=+A.c;break;
 case'qw':QO.weak=!QO.weak;break;
 case'qcl':QO.close=!QO.close;break;
-case'quiz':{let ns=rangeNums('quiz').filter(has);if(QO.weak){ns=ns.filter(n=>level(n)==1);if(!ns.length){toast('No words in this part are still being learnt');return}}startQuiz(makeQuiz(ns,QO.count,QO.close),{ns,count:QO.count,close:QO.close});break}
+case'qfm':QO.fam=!QO.fam;break;
+case'quiz':{let ns=rangeNums('quiz').filter(has);if(QO.weak){ns=ns.filter(n=>level(n)==1);if(!ns.length){toast('No words in this part are still being learnt');return}}startQuiz(makeQuiz(ns,QO.count,QO.close,QO.fam),{ns,count:QO.count,close:QO.close,fam:QO.fam});break}
 case'gquiz':startQuiz(shuffle(WD_CONF[A.g].q.map((_,i)=>cfItem(A.g,i))),{g:A.g});break;
 case'pick':{if(z.pick!=null)return;z.pick=+A.i;const it=z.items[z.i],ok=it.opts[z.pick]==it.ans;if(ok)z.right++;else z.wrong.push(it.n);if(it.n)quizMark(it.n,ok);break}
 case'next':z.i++;z.pick=null;scrollTo(0,0);break;
 case'qquit':if(z.i>0&&z.i<z.items.length&&!confirm('Stop the quiz?'))return;QZ=null;break;
 case'qdone':QZ=null;break;
+case'sent':SPICK=true;AIM.list=null;AIM.msg='';scrollTo(0,0);break;
+case'sgo':SPICK=false;startSent(rangeNums('quiz'));break;
+case'sback':SPICK=false;break;
+case'scheck':checkSent();return;
+case'sai':aiSent();return;
+case'sai2':aiSent2();return;
+// Google reads only about 32 words of a search, so the ask stays short and the student's sentence comes last
+case'sgoogle':{const w=VWL[ST.ns[ST.i]-1];find(w,`Is "${w}" used correctly here? Fix the grammar but keep the word "${w}" in the corrected sentence: "${ST.text.trim()}"`);return}
+case'sedit':ST.res=null;break;
+case'smark':{const n=ST.ns[ST.i],ok=A.ok=='1';if(ok)ST.ok++;else ST.bad.push(n);quizMark(n,ok);ST.i++;ST.text='';ST.res=null;scrollTo(0,0);break}
+case'squit':if(ST.i>0&&ST.i<ST.ns.length&&!confirm('Stop writing?'))return;ST=null;break;
+case'sdone':ST=null;break;
+case'sagain':startSent(ST.from);break;
 case'qwrong':{const wn=[...new Set(z.wrong.filter(has))];startQuiz(makeQuiz(wn,Math.max(5,wn.length*2),false),{ns:wn,count:Math.max(5,wn.length*2)});break}
-case'qagain':{const a=z.again||{};startQuiz(a.g?shuffle(WD_CONF[a.g].q.map((_,i)=>cfItem(a.g,i))):makeQuiz(a.ns,a.count||10,a.close!==false),a);break}
+case'qagain':{const a=z.again||{};startQuiz(a.g?shuffle(WD_CONF[a.g].q.map((_,i)=>cfItem(a.g,i))):makeQuiz(a.ns,a.count||10,a.close!==false,a.fam!==false),a);break}
 case'ixf':IX.f=A.v;break;
 case'add':{const n=+A.n;S.w[n]={b:1,due:today(),r:0,x:0,at:today()};save();toast('Added to today');break}
 case'known':{const n=+A.n,o=rec(n)||{r:0,x:0,at:today()};S.w[n]={...o,b:4,due:addDays(today(),INT[4])};save();toast(`OK, it will come back once in ${INT[4]} days`);break}
 case'daily':S.daily=+A.c;save();resetRanges();break;
 case'theme':S.theme=A.v;save();break;
+case'aiback':AIS.backup=A.v=='1';saveAI();break;
+case'aiprov':if(AI.prov!=A.v){AI.prov=A.v;AIM.list=null;AIM.msg='';saveAI()}break;
+case'aimodels':{const k=($('#aikey')||{}).value||'';AI.key=k.trim();saveAI();if(!AI.key){AIM.msg='Paste the key first';break}AIM.msg='Loading models…';render();
+aiModels().then(l=>{AIM.list=l;if(!l.includes(AI.model))AI.model=aiPick(l);saveAI();AIM.msg=l.length?'Saved. Choose a model if you like, then Test it.':'No usable models for this key'}).catch(e=>{AIM.list=null;AIM.msg=e.message||'Could not load models'}).then(render);return}
+case'aitest':AIM.msg='Testing…';render();aiAsk(sentPrompt('abate',D(2),'The storm abated after midnight.')).then(x=>{const a=aiParse(x);AIM.msg=`Works. (${AI.model} said: ${a.v})`}).catch(e=>{AIM.msg=e instanceof SyntaxError?'It answered, but not in the expected form; try another model':e.message||'Failed'}).then(render);return
 case'export':{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download=`vocab500-${today()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);return}
 case'import':{const f=document.createElement('input');f.type='file';f.accept='.json,application/json';f.onchange=()=>{const x=f.files[0];if(!x)return;x.text().then(t=>{try{const o=JSON.parse(t);if(o.v!=1||!o.w)throw 0;if(!confirm('Replace your current progress with the one in this file?'))return;S={...S0,...o};save();resetRanges();render();toast('Progress loaded')}catch(e){toast('This is not a Vocab 500 progress file')}})};f.click();return}
 case'reset':if(!confirm('Erase the record of every word you have studied?'))return;S={...JSON.parse(JSON.stringify(S0)),theme:S.theme};save();resetRanges();toast('Progress erased');break;
@@ -302,16 +510,21 @@ render()}
 function applyTheme(){const t=S.theme=='system'?(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):S.theme;document.documentElement.dataset.theme=t}
 
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;if(b.tagName=='INPUT'){act(b);return}e.preventDefault();act(b)});
-document.addEventListener('input',e=>{if(e.target.id=='q'){IX.q=e.target.value;$('#list').innerHTML=listHtml()}});
+document.addEventListener('change',e=>{if(e.target.id=='aimodel'){AI.model=e.target.value;saveAI();AIM.msg='Model changed. Test it?';render()}});
+document.addEventListener('input',e=>{if(e.target.id=='stext'&&ST){const had=!!ST.text.trim();ST.text=e.target.value;if(had!=!!ST.text.trim()){const b=$('[data-act=scheck]');if(b)b.disabled=!ST.text.trim()}return}if(e.target.id=='q'){IX.q=e.target.value;$('#list').innerHTML=listHtml()}});
+const click0=s=>{const b=$(s);if(b&&!b.disabled)b.click()};
 document.addEventListener('keydown',e=>{
-if(e.target.tagName=='INPUT'){if(e.key=='Enter'&&/^(learn|quiz)[az]$/.test(e.target.id)){readNums(e.target.id.slice(0,-1));render()}return}
+if(e.target.tagName=='TEXTAREA'){if(e.key=='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();click0('[data-act=scheck]')}else if(e.key=='Escape')e.target.blur();return}
+if(e.target.tagName=='INPUT'){if(e.key=='Enter'&&e.target.id=='aikey'){e.preventDefault();click0('[data-act=aimodels]');return}if(e.key=='Enter'&&/^(learn|quiz)[az]$/.test(e.target.id)){readNums(e.target.id.slice(0,-1));render()}return}
 if(e.ctrlKey||e.metaKey||e.altKey)return;
 const click=s=>{const b=$(s);if(b){e.preventDefault();b.click();return true}return false};
 const k=e.key.replace(/[০-৯]/g,c=>BN.indexOf(c));
 if(SES){if(e.key=='Escape')return click('[data-act=quit]');if(e.key==' '||e.key=='Enter'){if(click('[data-act=show]'))return;if(e.key=='Enter')click('[data-act=rate][data-r=good]');else e.preventDefault();return}
 const r={1:'again',2:'hard',3:'good',4:'easy'}[k];if(r)click(`[data-act=rate][data-r=${r}]`);return}
+if(SPICK){if(e.key=='Escape')return click('[data-act=sback]');if(/^[1-3]$/.test(k))return click(`.opts [data-act=aiprov]:nth-child(${k})`);if(e.key=='Enter')click('[data-act=sgo]:not([disabled])');return}
+if(ST){if(e.key=='Escape')return click('[data-act=squit]');if(ST.res&&e.key=='Enter')click('[data-act=smark].go');return}
 if(QZ){if(e.key=='Escape')return click('[data-act=qquit]');if(/^[1-9]$/.test(k))return click(`[data-act=pick][data-i="${+k-1}"]:not([disabled])`);if(e.key=='Enter')click('[data-act=next]')}});
-window.addEventListener('hashchange',()=>{if(SES||QZ){SES=null;QZ=null}render();scrollTo(0,0)});
+window.addEventListener('hashchange',()=>{if(SES||QZ||ST||SPICK){SES=null;QZ=null;ST=null;SPICK=false}render();scrollTo(0,0)});
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(S.theme=='system')applyTheme()})}catch(e){}
 window.addEventListener('storage',e=>{if(e.key==KEY){S=load();render()}});
 // #/start (library.html#vocab/start in Shobdo) opens straight into today's study

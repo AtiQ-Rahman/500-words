@@ -11,7 +11,13 @@ and its close words (abate / allay / alleviate / mitigate …) side by side with
 - **Learn:** pick a week and a day (Day 7 = the whole week), or any numbers (1-10). Days follow the words-a-day
   setting: with 10 a day, Day 1 is #1-10 and Day 7 revises #1-60.
 - **Quiz:** a week, a day or any numbers (1-50 …), how many questions, only the words still being learnt, close-word
-  questions. Wrong answers come back in today's review.
+  questions, word-family questions (*abate* is which part of speech? what is its noun? → *abatement*). Wrong answers come back in today's review.
+- **Write sentences** (on the Quiz page): make your own sentence with each word. It checks that the word (or a form
+  of it) is there and checks grammar and spelling with LanguageTool's free public API (online; about 20 checks a minute).
+  With a free API key (Settings → AI check: Google Gemini from aistudio.google.com, or Groq from console.groq.com)
+  an AI also judges the meaning, grammar and how natural it sounds, in Bangla and rewrites your sentence (corrected, or more polished). The examples shown are always the book's own. The key
+  stays in the browser (not in the progress file). Without a key: compare with the book's example, or ask Google /
+  Chrome's built-in AI. Then mark it right or wrong.
 - **Close words:** the close-word groups. **Word list:** all 500, search by word, number or Bangla meaning.
 - **Google** on a card searches "*word* Bangla meaning with mnemonic" in a small window beside the app.
 
